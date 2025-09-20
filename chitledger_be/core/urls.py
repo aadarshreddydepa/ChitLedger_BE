@@ -5,10 +5,10 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
-from .views import SignupView, SigninView, PermissionRequiredView
+from .views import SigninView, PermissionRequiredView, FirebaseSignupView
 
 urlpatterns = [
-    path("signup/", SignupView.as_view(), name="signup"),
+    path("signup/", FirebaseSignupView.as_view(), name="signup"),
     path("signin/", SigninView.as_view(), name="signin"),
     path("authcheck/", PermissionRequiredView.as_view(), name="authcheck"),
      # JWT built-in endpoints

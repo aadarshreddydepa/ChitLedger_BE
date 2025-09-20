@@ -93,3 +93,10 @@ wheels/
 
 # Local settings
 local_settings.py
+
+#firebase
+chitledger-firebase-adminsdk-fbsvc-eba8acfd1f.json
+
+
+#chitledger
+chitledger_fe
