@@ -136,4 +136,50 @@ class FirebaseSignupView(APIView):
                 "error": f"Signup failed: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# Your other existing views...
+class FirebasePasswordResetView(APIView):
+    def post(self, request):
+        try:
+            id_token = request.data.get("idToken")
+            phone_number = request.data.get("phoneNumber")
+            new_password = request.data.get("newPassword")  # Expect "password" key, not "newPassword"
+
+            if not id_token or not phone_number or not new_password:
+                return Response({
+                    "error": "idToken, phoneNumber, and password are required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Verify Firebase ID token
+            decoded_token = firebase_auth.verify_id_token(id_token)
+            token_phone_number = decoded_token.get("phone_number")
+
+            if token_phone_number != phone_number:
+                return Response({
+                    "error": "Phone number mismatch with token"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                user = User.objects.get(phone_number=phone_number)
+            except User.DoesNotExist:
+                return Response({
+                    "error": "User not found"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Set the new password securely
+            user.set_password(new_password)
+            user.save()
+
+            return Response({
+                "message": "Password reset successful"
+            }, status=status.HTTP_200_OK)
+
+        except firebase_auth.InvalidIdTokenError:
+            return Response({
+                "error": "Invalid Firebase ID token"
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+            print(f"❌ Password reset error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                "error": f"Password reset failed: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

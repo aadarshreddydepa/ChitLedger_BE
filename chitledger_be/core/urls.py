@@ -5,11 +5,12 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
-from .views import SigninView, PermissionRequiredView, FirebaseSignupView
+from .views import SigninView,FirebasePasswordResetView, PermissionRequiredView, FirebaseSignupView
 
 urlpatterns = [
     path("signup/", FirebaseSignupView.as_view(), name="signup"),
     path("signin/", SigninView.as_view(), name="signin"),
+    path("forgotpassword/", FirebasePasswordResetView.as_view(), name="forgot-password"),
     path("authcheck/", PermissionRequiredView.as_view(), name="authcheck"),
      # JWT built-in endpoints
     path("token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),   # login (access + refresh)
