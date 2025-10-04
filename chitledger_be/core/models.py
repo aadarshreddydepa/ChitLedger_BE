@@ -21,7 +21,7 @@ class UserManager(BaseUserManager):
         return self.create_user(phone_number, name, password, **extra_fields)
 
 
-# ---------- User ----------
+# ---------- User (Verified Member) ----------
 class User(AbstractBaseUser, PermissionsMixin):
     user_id = models.AutoField(primary_key=True)
     phone_number = models.CharField(max_length=15, unique=True)
@@ -50,7 +50,8 @@ class Chit(models.Model):
     )
     title = models.CharField(max_length=100)
     total_slots = models.PositiveIntegerField()
-    monthly_contribution = models.DecimalField(max_digits=12, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=False)
+    lift_amount = models.DecimalField(max_digits=12, decimal_places=2, null=False)  # fixed per month
     start_date = models.DateField()
     duration_months = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -59,7 +60,7 @@ class Chit(models.Model):
         return f"{self.title} ({self.chit_id})"
 
 
-# ---------- Membership ----------
+# ---------- Membership (Verified Users only) ----------
 class Membership(models.Model):
     membership_id = models.AutoField(primary_key=True)
     chit = models.ForeignKey(
@@ -78,6 +79,46 @@ class Membership(models.Model):
     def __str__(self):
         return f"{self.user.name} in {self.chit.title} ({self.slot_count} slots)"
 
+# ---------- External Member (Lightweight Mode) ----------
+class ExternalMember(models.Model):
+    member_id = models.AutoField(primary_key=True)
+    chit = models.ForeignKey(Chit, on_delete=models.CASCADE, related_name="external_members")
+    phone_number = models.CharField(max_length=15)
+    name = models.CharField(max_length=100, blank=True, null=True)
+    slot_count = models.PositiveIntegerField(default=1)
+    is_organizer = models.BooleanField(default=False)
+    joined_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name or self.phone_number} in {self.chit.title} ({self.slot_count} slots)"
+
+
+# ---------- Chit Schedule (Month-wise rules) ----------
+class ChitSchedule(models.Model):
+    chit = models.ForeignKey(Chit, on_delete=models.CASCADE, related_name="schedules")
+    month_number = models.PositiveIntegerField()  # 1..duration
+    lift_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    no_lift_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    # Who lifted this month (real or external)
+    lifted_by_membership = models.ForeignKey(
+        Membership, on_delete=models.SET_NULL, null=True, blank=True, related_name="lifted_schedules"
+    )
+    lifted_by_external = models.ForeignKey(
+        ExternalMember, on_delete=models.SET_NULL, null=True, blank=True, related_name="lifted_schedules"
+    )
+
+    class Meta:
+        unique_together = ("chit", "month_number")
+
+    def __str__(self):
+        who = (
+            self.lifted_by_membership.user.name
+            if self.lifted_by_membership
+            else self.lifted_by_external.name if self.lifted_by_external else "Unassigned"
+        )
+        return f"{self.chit.title} - Month {self.month_number} Lifted by {who}"
+
 
 # ---------- Payment ----------
 class Payment(models.Model):
@@ -89,6 +130,13 @@ class Payment(models.Model):
     payment_id = models.AutoField(primary_key=True)
     membership = models.ForeignKey(
         Membership, on_delete=models.CASCADE, related_name="payments"
+    )
+    external_member = models.ForeignKey(
+        ExternalMember, on_delete=models.CASCADE, related_name="payments", null=True, blank=True
+    )
+
+    chit_schedule = models.ForeignKey(
+        ChitSchedule, on_delete=models.CASCADE, related_name="payments"
     )
     month_number = models.PositiveIntegerField()  # 1, 2, 3 ... duration
     amount_paid = models.DecimalField(max_digits=12, decimal_places=2)
