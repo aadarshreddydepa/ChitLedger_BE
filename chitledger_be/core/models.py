@@ -128,11 +128,22 @@ class Payment(models.Model):
         ("late", "Late"),
     )
     payment_id = models.AutoField(primary_key=True)
+    
+    # IMPORTANT: Both membership and external_member should be nullable
+    # Only ONE of them should be set per payment
     membership = models.ForeignKey(
-        Membership, on_delete=models.CASCADE, related_name="payments"
+        Membership, 
+        on_delete=models.CASCADE, 
+        related_name="payments",
+        null=True,      # ⭐ ADD THIS
+        blank=True      # ⭐ ADD THIS
     )
     external_member = models.ForeignKey(
-        ExternalMember, on_delete=models.CASCADE, related_name="payments", null=True, blank=True
+        ExternalMember, 
+        on_delete=models.CASCADE, 
+        related_name="payments", 
+        null=True, 
+        blank=True
     )
 
     chit_schedule = models.ForeignKey(
@@ -142,6 +153,18 @@ class Payment(models.Model):
     amount_paid = models.DecimalField(max_digits=12, decimal_places=2)
     payment_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+
+    class Meta:
+        # Optional: Add constraint to ensure at least one is set
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(membership__isnull=False, external_member__isnull=True) |
+                    models.Q(membership__isnull=True, external_member__isnull=False)
+                ),
+                name='payment_has_one_member_type'
+            )
+        ]
 
     def __str__(self):
         return f"Payment {self.payment_id} - {self.status}"

@@ -140,8 +140,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 SIMPLE_JWT = {
     "USER_ID_FIELD": "user_id",   # match your model PK
     "USER_ID_CLAIM": "user_id",   # claim name inside JWT payload
-    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(seconds=40),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
