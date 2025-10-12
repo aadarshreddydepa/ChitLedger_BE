@@ -1,6 +1,7 @@
 # Import Firebase to ensure it's initialized
 
 
+from datetime import datetime
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -10,6 +11,8 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate
 from rest_framework.permissions import  IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+
+from core.utils import calculate_current_month, calculate_payment_summary, check_if_member_can_lift, get_chit_dashboard_data, get_member_payment_history, validate_chit_completion
 from .models import Chit, ChitSchedule, Membership, Payment, User, ExternalMember
 from .serializers import ChitCreateSerializer, ChitDetailSerializer, ChitListSerializer, ChitScheduleUpdateSerializer, PaymentCreateSerializer, PaymentSerializer, UserSignupSerializer, UserSigninSerializer, MembershipSerializer, ExternalMemberSerializer, ChitScheduleSerializer, ExternalMemberCreateSerializer
 # import firebase
@@ -700,3 +703,368 @@ class ExternalMemberDetailView(APIView):
             {"message": "External member removed successfully"},
             status=status.HTTP_204_NO_CONTENT
         )
+    
+
+# ============================================================================
+# ORGANIZER DASHBOARD
+# ============================================================================
+
+class OrganizerDashboardView(APIView):
+    """
+    GET /api/dashboard/organizer/
+    Get overview of all chits for organizer
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        chits = Chit.objects.filter(organizer=user).order_by('-created_at')
+        
+        overview = []
+        for chit in chits:
+            current_month = calculate_current_month(chit)
+            
+            # Get current month summary if applicable
+            current_summary = None
+            if current_month:
+                current_summary = calculate_payment_summary(chit, current_month)
+            
+            # Count total members
+            verified_count = chit.memberships.count()
+            external_count = chit.external_members.count()
+            
+            # Get pending payments count
+            pending_payments = Payment.objects.filter(
+                chit_schedule__chit=chit,
+                status__in=['pending', 'late']
+            ).count()
+            
+            overview.append({
+                'chit_id': chit.chit_id,
+                'title': chit.title,
+                'total_amount': str(chit.total_amount),
+                'start_date': chit.start_date,
+                'duration_months': chit.duration_months,
+                'current_month': current_month,
+                'total_members': verified_count + external_count,
+                'pending_payments_count': pending_payments,
+                'current_month_summary': current_summary
+            })
+        
+        return Response({
+            'total_chits': len(overview),
+            'chits': overview
+        })
+
+
+# ============================================================================
+# CHIT DASHBOARD
+# ============================================================================
+
+class ChitDashboardView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/
+    Get comprehensive dashboard data for a chit
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        dashboard_data = get_chit_dashboard_data(chit)
+        return Response(dashboard_data)
+
+
+# ============================================================================
+# CURRENT MONTH DETAILS
+# ============================================================================
+
+class CurrentMonthView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/current-month/
+    Get current month details and payment status
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        current_month = calculate_current_month(chit)
+        
+        if not current_month:
+            return Response({
+                'message': 'Chit has not started yet or has been completed',
+                'current_month': None,
+                'payment_summary': None
+            })
+        
+        payment_summary = calculate_payment_summary(chit, current_month)
+        
+        return Response({
+            'current_month': current_month,
+            'payment_summary': payment_summary
+        })
+
+
+# ============================================================================
+# MEMBER PAYMENT HISTORY
+# ============================================================================
+
+class MemberPaymentHistoryView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/member-history/
+    Query params: member_id, member_type
+    Get payment history for a specific member
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        
+        member_id = request.query_params.get('member_id')
+        member_type = request.query_params.get('member_type')
+        
+        if not member_id or not member_type:
+            return Response(
+                {'error': 'member_id and member_type parameters are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if member_type not in ['verified', 'external']:
+            return Response(
+                {'error': 'member_type must be either "verified" or "external"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        history = get_member_payment_history(chit, member_id, member_type)
+        
+        return Response({
+            'member_id': member_id,
+            'member_type': member_type,
+            'payment_history': history
+        })
+
+
+# ============================================================================
+# CHECK LIFT ELIGIBILITY
+# ============================================================================
+
+class CheckLiftEligibilityView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/check-eligibility/
+    Query params: member_id, member_type
+    Check if a member can lift in the chit
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        
+        member_id = request.query_params.get('member_id')
+        member_type = request.query_params.get('member_type')
+        
+        if not member_id or not member_type:
+            return Response(
+                {'error': 'member_id and member_type parameters are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        can_lift, reason = check_if_member_can_lift(chit, member_id, member_type)
+        
+        return Response({
+            'can_lift': can_lift,
+            'reason': reason
+        })
+
+
+# ============================================================================
+# CHIT VALIDATION
+# ============================================================================
+
+class ChitValidationView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/validate/
+    Validate chit completion status
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        is_valid, issues = validate_chit_completion(chit)
+        
+        return Response({
+            'is_valid': is_valid,
+            'issues': issues
+        })
+
+
+# ============================================================================
+# MONTHLY REPORT
+# ============================================================================
+
+class MonthlyReportView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/monthly-report/
+    Get detailed monthly report for all months
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        
+        monthly_reports = []
+        for month in range(1, chit.duration_months + 1):
+            summary = calculate_payment_summary(chit, month)
+            if summary:
+                monthly_reports.append(summary)
+        
+        return Response({
+            'chit_id': chit.chit_id,
+            'title': chit.title,
+            'total_months': chit.duration_months,
+            'monthly_reports': monthly_reports
+        })
+
+
+# ============================================================================
+# PAYMENT REMINDERS
+# ============================================================================
+
+class PaymentReminderView(APIView):
+    """
+    GET /api/dashboard/chit/{chit_id}/payment-reminders/
+    Get list of members with pending/late payments for current month
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        current_month = calculate_current_month(chit)
+        
+        if not current_month:
+            return Response({
+                'message': 'No active month for reminders',
+                'month_number': None,
+                'total_pending': 0,
+                'reminders': []
+            })
+        
+        # Get all pending/late payments for current month
+        schedule = ChitSchedule.objects.filter(
+            chit=chit,
+            month_number=current_month
+        ).first()
+        
+        if not schedule:
+            return Response({
+                'message': 'Schedule not found',
+                'month_number': current_month,
+                'total_pending': 0,
+                'reminders': []
+            })
+        
+        pending_payments = Payment.objects.filter(
+            chit_schedule=schedule,
+            status__in=['pending', 'late']
+        ).select_related('membership__user', 'external_member')
+        
+        reminders = []
+        for payment in pending_payments:
+            if payment.membership:
+                member_info = {
+                    'name': payment.membership.user.name,
+                    'phone': payment.membership.user.phone_number,
+                    'type': 'verified'
+                }
+            else:
+                member_info = {
+                    'name': payment.external_member.name or 'Unknown',
+                    'phone': payment.external_member.phone_number,
+                    'type': 'external'
+                }
+            
+            # Calculate days overdue
+            days_overdue = 0
+            if payment.status == 'late':
+                days_overdue = (datetime.now().date() - payment.payment_date.date()).days
+            
+            reminders.append({
+                'payment_id': payment.payment_id,
+                'member': member_info,
+                'amount_due': str(payment.amount_paid),
+                'status': payment.status,
+                'days_overdue': days_overdue
+            })
+        
+        return Response({
+            'month_number': current_month,
+            'total_pending': len(reminders),
+            'reminders': reminders
+        })
+
+
+# ============================================================================
+# BULK PAYMENT UPDATE
+# ============================================================================
+
+class BulkPaymentUpdateView(APIView):
+    """
+    POST /api/dashboard/chit/{chit_id}/bulk-payment-update/
+    Bulk update payment statuses
+    Body: {
+        "updates": [
+            {"payment_id": 1, "status": "paid"},
+            {"payment_id": 2, "status": "late"}
+        ]
+    }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, chit_id):
+        chit = get_object_or_404(Chit, chit_id=chit_id, organizer=request.user)
+        updates = request.data.get('updates', [])
+        
+        if not updates:
+            return Response(
+                {'error': 'No updates provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        updated_payments = []
+        errors = []
+        
+        for update in updates:
+            payment_id = update.get('payment_id')
+            new_status = update.get('status')
+            
+            if not payment_id or not new_status:
+                errors.append({
+                    'payment_id': payment_id,
+                    'error': 'Missing payment_id or status'
+                })
+                continue
+            
+            if new_status not in ['paid', 'pending', 'late']:
+                errors.append({
+                    'payment_id': payment_id,
+                    'error': 'Invalid status'
+                })
+                continue
+            
+            try:
+                payment = Payment.objects.get(
+                    payment_id=payment_id,
+                    chit_schedule__chit=chit
+                )
+                payment.status = new_status
+                payment.save()
+                updated_payments.append(payment_id)
+            except Payment.DoesNotExist:
+                errors.append({
+                    'payment_id': payment_id,
+                    'error': 'Payment not found'
+                })
+        
+        return Response({
+            'updated_count': len(updated_payments),
+            'updated_payment_ids': updated_payments,
+            'errors': errors
+        })

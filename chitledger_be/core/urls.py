@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 
-from .views import ChitAddExternalMemberView, ChitDetailView, ChitListCreateView, ChitMembersView, ChitSchedulesView, ChitViewSet, ExternalMemberDetailView, ExternalMemberListView, PaymentByChitView, PaymentByMonthView, PaymentDetailView, PaymentListCreateView, PaymentUpdateStatusView, ScheduleAssignLifterView, ScheduleDetailView, ScheduleListView, ScheduleUpdateMonthView, SigninView,FirebasePasswordResetView, PermissionRequiredView, FirebaseSignupView
+from .views import BulkPaymentUpdateView, CheckLiftEligibilityView, ChitAddExternalMemberView, ChitDashboardView, ChitDetailView, ChitListCreateView, ChitMembersView, ChitSchedulesView, ChitValidationView, ChitViewSet, CurrentMonthView, ExternalMemberDetailView, ExternalMemberListView, MemberPaymentHistoryView, MonthlyReportView, OrganizerDashboardView, PaymentByChitView, PaymentByMonthView, PaymentDetailView, PaymentListCreateView, PaymentReminderView, PaymentUpdateStatusView, ScheduleAssignLifterView, ScheduleDetailView, ScheduleListView, ScheduleUpdateMonthView, SigninView,FirebasePasswordResetView, PermissionRequiredView, FirebaseSignupView
 
 
 # router = DefaultRouter()
@@ -88,31 +88,31 @@ urlpatterns = [
     # ============================================================================
     # DASHBOARD & ANALYTICS ENDPOINTS
     # ============================================================================
-    # path('dashboard/organizer/', OrganizerDashboardView.as_view(), name='organizer-dashboard'),
-    # # GET /api/dashboard/organizer/  - Get overview of all chits for organizer
+    path('dashboard/organizer/', OrganizerDashboardView.as_view(), name='organizer-dashboard'),
+    # GET /api/dashboard/organizer/  - Get overview of all chits for organizer
     
-    # path('dashboard/chit/<int:chit_id>/', ChitDashboardView.as_view(), name='chit-dashboard'),
-    # # GET /api/dashboard/chit/{id}/  - Get comprehensive chit dashboard
+    path('dashboard/chit/<int:chit_id>/', ChitDashboardView.as_view(), name='chit-dashboard'),
+    # GET /api/dashboard/chit/{id}/  - Get comprehensive chit dashboard
     
-    # path('dashboard/chit/<int:chit_id>/current-month/', CurrentMonthView.as_view(), name='current-month'),
-    # # GET /api/dashboard/chit/{id}/current-month/  - Get current month details
+    path('dashboard/chit/<int:chit_id>/current-month/', CurrentMonthView.as_view(), name='current-month'),
+    # GET /api/dashboard/chit/{id}/current-month/  - Get current month details
     
-    # path('dashboard/chit/<int:chit_id>/member-history/', MemberPaymentHistoryView.as_view(), name='member-history'),
-    # # GET /api/dashboard/chit/{id}/member-history/?member_id=1&member_type=external
+    path('dashboard/chit/<int:chit_id>/member-history/', MemberPaymentHistoryView.as_view(), name='member-history'),
+    # GET /api/dashboard/chit/{id}/member-history/?member_id=1&member_type=external
     
-    # path('dashboard/chit/<int:chit_id>/check-eligibility/', CheckLiftEligibilityView.as_view(), name='check-eligibility'),
-    # # GET /api/dashboard/chit/{id}/check-eligibility/?member_id=1&member_type=external
+    path('dashboard/chit/<int:chit_id>/check-eligibility/', CheckLiftEligibilityView.as_view(), name='check-eligibility'),
+    # GET /api/dashboard/chit/{id}/check-eligibility/?member_id=1&member_type=external
     
-    # path('dashboard/chit/<int:chit_id>/validate/', ChitValidationView.as_view(), name='chit-validation'),
-    # # GET /api/dashboard/chit/{id}/validate/  - Validate chit completion status
+    path('dashboard/chit/<int:chit_id>/validate/', ChitValidationView.as_view(), name='chit-validation'),
+    # GET /api/dashboard/chit/{id}/validate/  - Validate chit completion status
     
-    # path('dashboard/chit/<int:chit_id>/monthly-report/', MonthlyReportView.as_view(), name='monthly-report'),
-    # # GET /api/dashboard/chit/{id}/monthly-report/  - Get detailed monthly report
+    path('dashboard/chit/<int:chit_id>/monthly-report/', MonthlyReportView.as_view(), name='monthly-report'),
+    # GET /api/dashboard/chit/{id}/monthly-report/  - Get detailed monthly report
     
-    # path('dashboard/chit/<int:chit_id>/payment-reminders/', PaymentReminderView.as_view(), name='payment-reminders'),
-    # # GET /api/dashboard/chit/{id}/payment-reminders/  - Get pending payment reminders
+    path('dashboard/chit/<int:chit_id>/payment-reminders/', PaymentReminderView.as_view(), name='payment-reminders'),
+    # GET /api/dashboard/chit/{id}/payment-reminders/  - Get pending payment reminders
     
-    # path('dashboard/chit/<int:chit_id>/bulk-payment-update/', BulkPaymentUpdateView.as_view(), name='bulk-payment-update'),
+    path('dashboard/chit/<int:chit_id>/bulk-payment-update/', BulkPaymentUpdateView.as_view(), name='bulk-payment-update'),
     # POST /api/dashboard/chit/{id}/bulk-payment-update/  - Bulk update payment statuses
      # JWT built-in endpoints
     path("token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),   # login (access + refresh)

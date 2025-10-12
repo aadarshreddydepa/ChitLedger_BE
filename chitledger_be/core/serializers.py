@@ -249,5 +249,147 @@ class ChitDetailSerializer(serializers.ModelSerializer):
                   'start_date', 'duration_months', 'created_at',
                   'memberships', 'external_members', 'schedules']
 
+# Dashboard 
 
+
+
+class PaymentSummarySerializer(serializers.Serializer):
+    """Summary of payments for a month"""
+    month_number = serializers.IntegerField()
+    lift_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    no_lift_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_expected = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_collected = serializers.DecimalField(max_digits=12, decimal_places=2)
+    balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+    paid_count = serializers.IntegerField()
+    pending_count = serializers.IntegerField()
+    late_count = serializers.IntegerField()
+    lifter = serializers.DictField(allow_null=True)
+
+
+class MemberInfoSerializer(serializers.Serializer):
+    """Unified member info (verified or external)"""
+    id = serializers.IntegerField()
+    type = serializers.CharField()
+    name = serializers.CharField()
+    phone_number = serializers.CharField()
+    slot_count = serializers.IntegerField()
+    is_organizer = serializers.BooleanField()
+    joined_date = serializers.DateTimeField()
+
+
+class ChitDashboardSerializer(serializers.Serializer):
+    """Complete chit dashboard data"""
+    chit_id = serializers.IntegerField()
+    title = serializers.CharField()
+    organizer = serializers.DictField()
+    total_slots = serializers.IntegerField()
+    used_slots = serializers.IntegerField()
+    available_slots = serializers.IntegerField()
+    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    lift_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    start_date = serializers.DateField()
+    duration_months = serializers.IntegerField()
+    current_month = serializers.IntegerField(allow_null=True)
+    current_month_summary = PaymentSummarySerializer(allow_null=True)
+    members = MemberInfoSerializer(many=True)
+    schedules = serializers.ListField()
+
+
+class OrganizerChitSummarySerializer(serializers.Serializer):
+    """Summary of a single chit for organizer dashboard"""
+    chit_id = serializers.IntegerField()
+    title = serializers.CharField()
+    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    start_date = serializers.DateField()
+    duration_months = serializers.IntegerField()
+    current_month = serializers.IntegerField(allow_null=True)
+    total_members = serializers.IntegerField()
+    pending_payments_count = serializers.IntegerField()
+    current_month_summary = PaymentSummarySerializer(allow_null=True)
+
+
+class OrganizerDashboardSerializer(serializers.Serializer):
+    """Complete organizer dashboard"""
+    total_chits = serializers.IntegerField()
+    chits = OrganizerChitSummarySerializer(many=True)
+
+
+class PaymentHistorySerializer(serializers.Serializer):
+    """Payment history for a member"""
+    month_number = serializers.IntegerField()
+    amount_paid = serializers.DecimalField(max_digits=12, decimal_places=2)
+    status = serializers.CharField()
+    payment_date = serializers.DateTimeField()
+    is_lifter = serializers.BooleanField()
+
+
+class MemberPaymentHistoryResponseSerializer(serializers.Serializer):
+    """Response for member payment history"""
+    member_id = serializers.CharField()
+    member_type = serializers.CharField()
+    payment_history = PaymentHistorySerializer(many=True)
+
+
+class LiftEligibilitySerializer(serializers.Serializer):
+    """Lift eligibility check response"""
+    can_lift = serializers.BooleanField()
+    reason = serializers.CharField()
+
+
+class ChitValidationSerializer(serializers.Serializer):
+    """Chit validation response"""
+    is_valid = serializers.BooleanField()
+    issues = serializers.ListField(child=serializers.CharField())
+
+
+class MonthlyReportSerializer(serializers.Serializer):
+    """Complete monthly report"""
+    chit_id = serializers.IntegerField()
+    title = serializers.CharField()
+    total_months = serializers.IntegerField()
+    monthly_reports = PaymentSummarySerializer(many=True)
+
+
+class PaymentReminderSerializer(serializers.Serializer):
+    """Payment reminder for a member"""
+    payment_id = serializers.IntegerField()
+    member = serializers.DictField()
+    amount_due = serializers.DecimalField(max_digits=12, decimal_places=2)
+    status = serializers.CharField()
+    days_overdue = serializers.IntegerField()
+
+
+class PaymentRemindersResponseSerializer(serializers.Serializer):
+    """Response for payment reminders"""
+    month_number = serializers.IntegerField()
+    total_pending = serializers.IntegerField()
+    reminders = PaymentReminderSerializer(many=True)
+
+
+class BulkPaymentUpdateSerializer(serializers.Serializer):
+    """Input for bulk payment update"""
+    updates = serializers.ListField(
+        child=serializers.DictField()
+    )
+    
+    def validate_updates(self, value):
+        """Validate each update entry"""
+        for update in value:
+            if 'payment_id' not in update or 'status' not in update:
+                raise serializers.ValidationError(
+                    "Each update must have 'payment_id' and 'status'"
+                )
+            if update['status'] not in ['paid', 'pending', 'late']:
+                raise serializers.ValidationError(
+                    f"Invalid status: {update['status']}"
+                )
+        return value
+
+
+class BulkPaymentUpdateResponseSerializer(serializers.Serializer):
+    """Response for bulk payment update"""
+    updated_count = serializers.IntegerField()
+    updated_payment_ids = serializers.ListField(child=serializers.IntegerField())
+    errors = serializers.ListField(child=serializers.DictField())
 
